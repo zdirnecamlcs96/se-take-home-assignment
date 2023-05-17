@@ -67,7 +67,7 @@
   }
 
   const startProcessingTimer = (bot) => {
-      bot.timer = 3; // Initial timer value
+      bot.timer = 10; // Initial timer value
       bot.timerId = undefined;
 
       const timerId = setInterval(() => {
@@ -88,7 +88,7 @@
           bot.order = undefined;
           assignOrderToBot();
         }
-      }, 3000); // Update the timer every second
+      }, 10000); // Update the timer every second
 
       bot.timerId = timerId;
     };
