@@ -1,12 +1,13 @@
 <script setup>
-  import { ref, reactive, watch, isProxy, toRaw } from 'vue';
+  import { ref, reactive } from 'vue';
+  import OrderCard from '@/components/OrderCard.vue';
+  import PrimaryButton from '@/components/PrimaryButton.vue';
 
   const bots = reactive([]);
   const orders = reactive([]);
   const completedOrders = reactive([]);
   const orderUUID = ref(1);
   const botUUID = ref(1);
-
 
   const addOrder = async (vip = false) => {
     const order = reactive({
@@ -38,7 +39,6 @@
   }
 
   const removeBot = async () => {
-
     const bot = bots.shift();
 
     if (bot) {
@@ -66,68 +66,65 @@
     }
   }
 
-  const startProcessingTimer = (bot) => {
-      bot.timer = 10; // Initial timer value
-      bot.timerId = undefined;
+  const startProcessingTimer = async (bot) => {
+    bot.timer = 10; // Initial timer value
+    bot.timerId = undefined;
 
-      const timerId = setInterval(() => {
-        bot.timer -= 1; // Decrease the timer by 1 second
-        if (bot.timer <= 0) {
-          clearInterval(timerId);
+    const timerId = setInterval(() => {
+      bot.timer -= 1; // Decrease the timer by 1 second
+      if (bot.timer <= 0) {
+        clearInterval(timerId);
 
-          const order = orders.find(order => order.uuid === bot.order);
+        const order = orders.find(order => order.uuid === bot.order);
 
-          if (order) {
-            // move order to completed list
-            completedOrders.push(order);
+        if (order) {
+          // move order to completed list
+          completedOrders.push(order);
 
-            // remove order from pending list based on uuid
-            orders.splice(orders.findIndex(order => order.uuid === bot.order), 1);
-          }
-
-          bot.order = undefined;
-          assignOrderToBot();
+          // remove order from pending list based on uuid
+          orders.splice(orders.findIndex(order => order.uuid === bot.order), 1);
         }
-      }, 10000); // Update the timer every second
 
-      bot.timerId = timerId;
-    };
+        bot.order = undefined;
+        assignOrderToBot();
+      }
+    }, 1000); // Update the timer every second
+
+    bot.timerId = timerId;
+  };
 
 </script>
 
 <template>
   <div class="about">
-    <div class="mb-3 underline">
-      <p>Bot List:</p>
-      <button @click="addBot">+ Bot</button>
-      <button @click="removeBot">- Bot</button>
-      <ul>
+    <div class="bg-slate-200 rounded text-gray-800 p-3 mb-3">
+      <h3 class="text-2xl font-bold mb-1">Bots</h3>
+      <PrimaryButton @triggerClick="addBot" :text="`+ Bot`"/>
+      <PrimaryButton @triggerClick="removeBot" :text="`- Bot`"/>
+      <ul class="mt-3">
         <li v-for="bot in bots" :key="bot.uuid">
-          {{ bot.name }} - {{ bot.order ? `Processing Order ${bot.order}` : 'Idle' }}
+          {{ bot.name }}
+          <span class="bg-gray-100 rounded px-3">{{ bot.order ? `Processing Order ${bot.order} (${ bot.timer }s)` : 'Idle' }}</span>
         </li>
       </ul>
     </div>
 
-    <div>
-      <p>Pending Order List:</p>
-      <button @click="addOrder(false)">New Normal Order</button>
-      <button @click="addOrder(true)">New VIP Order</button>
-      <ul>
+    <div class="bg-slate-200 rounded text-gray-800 p-3 mb-3">
+      <h3 class="text-2xl font-bold mb-1">Pending Orders</h3>
+      <PrimaryButton @triggerClick="addOrder(false)" :text="`+ Order`"/>
+      <PrimaryButton @triggerClick="addOrder(true)" :text="`+ VIP Order`"/>
+      <ul class="mt-3">
         <li v-for="order in orders.filter(o => o.status === PENDING_STATUS)" :key="order.uuid">
-          Order {{ order.uuid }} - {{ order.status }}
-          <br/>
-          {{ order.vip ? 'VIP' : 'NORMAL' }}
+          <OrderCard :order="order" />
         </li>
       </ul>
     </div>
 
-    <div>
-      <p>Completed Order List:</p>
-      <ul>
+    <div class="bg-slate-200 rounded text-gray-800 p-3 mb-3">
+      <h3 class="text-2xl font-bold mb-1">Completed Orders</h3>
+      <ul class="mt-3">
         <li v-for="order in completedOrders" :key="order.uuid">
-          Order {{ order.uuid }} - {{ order.status }}
-          <br/>
-          {{ order.vip ? 'VIP' : 'NORMAL' }}
+          <OrderCard :order="order" />
         </li>
       </ul>
     </div>
