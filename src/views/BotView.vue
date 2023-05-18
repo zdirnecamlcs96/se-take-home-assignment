@@ -39,16 +39,19 @@
   }
 
   const removeBot = async () => {
-    const bot = bots.shift();
+    const bot = bots[0];
 
     if (bot) {
-      const order = orders.find(order => order.uuid === bot.order);
-      order.bot = undefined;
-      clearTimeout(bot.timerId);
+      const order = await orders.find(order => order.uuid === bot.order);
+
+      if (order) {
+        order.bot = undefined;
+        clearTimeout(bot.timerId);
+      }
     }
 
-
     bots.pop();
+
   }
 
   const assignOrderToBot = async () => {
