@@ -8,6 +8,7 @@
   const completedOrders = reactive([]);
   const orderUUID = ref(1);
   const botUUID = ref(1);
+  const processBot = ref(false);
 
   const addOrder = async (vip = false) => {
     const order = reactive({
@@ -26,31 +27,72 @@
   }
 
   const addBot = async () => {
-    const bot = reactive({
-      uuid: botUUID.value,
-      name: `Bot ${bots.length + 1}`,
-      order: undefined,
-      timer: 0
-    });
 
-    bots.push(bot);
-    assignOrderToBot();
-    botUUID.value++;
+    if (processBot.value) {
+      return;
+    }
+
+    processBot.value = true;
+
+    setTimeout(() => {
+      new Promise((resolve, reject) => {
+        try {
+          const bot = reactive({
+            uuid: botUUID.value,
+            order: undefined,
+            timer: 0
+          });
+
+          bots.push(bot);
+          botUUID.value++;
+          assignOrderToBot();
+          resolve();
+        } catch (error) {
+          reject(error)
+        }
+      })
+      .finally(() => {
+        processBot.value = false;
+      })
+    }, 500);
+
+
   }
 
   const removeBot = async () => {
-    const bot = bots[0];
 
-    if (bot) {
-      const order = await orders.find(order => order.uuid === bot.order);
-
-      if (order) {
-        order.bot = undefined;
-        clearTimeout(bot.timerId);
-      }
+    if (processBot.value) {
+      return;
     }
 
-    bots.pop();
+    processBot.value = true;
+
+    setTimeout(() => {
+      new Promise((resolve, reject) => {
+        try {
+          const bot = bots.shift();
+
+          if (bot) {
+            const order = orders.find(order => order.uuid === bot.order);
+
+            if (order) {
+              order.bot = undefined;
+              clearInterval(bot.timerId);
+            }
+          }
+
+          // bots.splice(0);
+          assignOrderToBot();
+          resolve();
+        } catch (error) {
+          reject(error)
+        }
+      })
+      .finally(() => {
+        processBot.value = false;
+      })
+    }, 500);
+
 
   }
 
@@ -102,12 +144,12 @@
   <div class="about">
     <div class="bg-slate-200 rounded text-gray-800 p-3 mb-3">
       <h3 class="text-2xl font-bold mb-1">Bots</h3>
-      <PrimaryButton @triggerClick="addBot" :text="`+ Bot`"/>
-      <PrimaryButton @triggerClick="removeBot" :text="`- Bot`"/>
+      <PrimaryButton @triggerClick="addBot()" :text="`+ Bot`" :disabled="processBot"/>
+      <PrimaryButton @triggerClick="removeBot()" :text="`- Bot`" :disabled="processBot"/>
       <ul class="mt-3">
         <li v-for="bot in bots" :key="bot.uuid">
-          {{ bot.name }}
-          <span class="bg-gray-100 rounded px-3">{{ bot.order ? `Processing Order ${bot.order} (${ bot.timer }s)` : 'Idle' }}</span>
+          <span class="mr-2">Cooking Bot <b>#{{ bot.uuid }}</b></span>
+          <span class="bg-gray-100 rounded px-3 text-sm">{{ bot.order ? `Processing Order ${bot.order} (${ bot.timer }s)` : 'Idle' }}</span>
         </li>
       </ul>
     </div>
@@ -118,7 +160,7 @@
       <PrimaryButton @triggerClick="addOrder(true)" :text="`+ VIP Order`"/>
       <ul class="mt-3">
         <li v-for="order in orders.filter(o => o.status === PENDING_STATUS)" :key="order.uuid">
-          <OrderCard :order="order" />
+          <OrderCard :order="order" status="2"/>
         </li>
       </ul>
     </div>
@@ -127,7 +169,7 @@
       <h3 class="text-2xl font-bold mb-1">Completed Orders</h3>
       <ul class="mt-3">
         <li v-for="order in completedOrders" :key="order.uuid">
-          <OrderCard :order="order" />
+          <OrderCard :order="order" completed/>
         </li>
       </ul>
     </div>
