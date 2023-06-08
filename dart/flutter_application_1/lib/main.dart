@@ -59,7 +59,7 @@ class MyHomePage extends StatefulWidget {
 }
 
 class MyListView extends StatefulWidget {
-  MyListView(this.title, this.list);
+  const MyListView(this.title, this.list);
 
   final List list;
   final String title;
@@ -71,8 +71,8 @@ class MyListView extends StatefulWidget {
       child: Column(
         children: <Widget>[
           Text(title),
-          Divider(),
-          Container(
+          const Divider(),
+          SizedBox(
             height: MediaQuery.of(context).size.height - 100,
             child: ListView.builder(
               controller: ScrollController(), // Define seperate scroll controller for each listing 
@@ -84,7 +84,7 @@ class MyListView extends StatefulWidget {
                 return ListTile(
                   title: Text("${item is Bot ? 'Bot(s)' : 'Order(s)'} ${item.uniqueId}"),
                   subtitle: item is Order
-                    ? Text("${item.vip ? 'VIP' : 'Normal'}")
+                    ? Text(item.vip ? 'VIP' : 'Normal')
                     : Text("${item.remaining}"),
                 );
               })
@@ -99,16 +99,21 @@ class MyListView extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
   int _orderUniqueId = 0;
   int _botUniqueId = 0;
+  bool _isPressed = false;
   List orders = [];
   List bots = [];
 
   void _addOrder({bool vip = false}) {
     setState(() {
-      orders.insert(0, Order(_orderUniqueId, vip));
+      if(vip) {
+        orders.insert(0, Order(_orderUniqueId, vip));
+      } else {
+        orders.add(Order(_orderUniqueId, vip));
+      }
       _orderUniqueId++;
+      processOrder(bots.firstWhere((n) => n.order == null, orElse: () => null));
     });
   }
 
@@ -121,19 +126,91 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
-  void processOrder(Bot bot) {
-    bot.remaining = 10;
-    bot.timer = null;
-
-    Timer.periodic(const Duration(seconds: 1), (timer) {
-      bot.remaining = bot.remaining! - 1;
-      bot.timer = timer;
-      bot.order = orders.firstOrNull;
-      if (bot.remaining! <= 0) {
-        timer.cancel();
-        bot.order?.completedAt = DateTime.now();
-      }
+  void _removeBot() {
+    setState(() {
+      Bot bot = bots.last;
+      Order? order = bot.order;
+      bot.timer?.cancel();
+      setState(() {
+        order?.bot = null;
+      });
+      bots.remove(bot);
+      processOrder(bots.firstWhere((n) => n.order == null, orElse: () => null));
     });
+  }
+
+  void processOrder(Bot? bot) {
+    // check if the bot is null
+    if (bot == null) return;
+
+    // set the initial remaining value
+    bot.remaining = 0;
+
+    // cancel the previous timer if any
+    bot.timer?.cancel();
+
+    Order? order = orders.firstWhere((n) => n.bot == null && n.completedAt == null, orElse: () => null);
+
+    if(order != null) {
+      setState(() {
+        bot.remaining = 10;
+        bot.order = order;
+        order.bot = bot;
+      });
+      bot.timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        setState(() {
+          bot.remaining = bot.remaining! - 1;
+          if (bot.remaining! <= 0) {
+            timer.cancel();
+            order.completedAt = DateTime.now();
+            bot.order = null;
+            processOrder(bot);
+          }
+        });
+      });
+    }
+
+  }
+
+  ListTile _listTile(item) {
+    return item is Bot
+    ? ListTile(
+      title: Text('Bot(s) #${item.uniqueId}'),
+      subtitle: item.order != null ? Row(
+        children: [
+          Text('Processing Order #${item.order?.uniqueId}'),
+          Text("(${item.remaining}s left)"),
+        ]
+      ) : null
+    )
+    : ListTile(
+      title: Text('Order(s) #${item.uniqueId}'),
+      subtitle: Text(item.vip ? 'VIP' : 'Normal'),
+    );
+  }
+
+  Widget _listView(title, list) {
+    return Flexible(
+      child: Column(
+        children: <Widget>[
+          const SizedBox(height: 10),
+          Text(title),
+          const SizedBox(height: 10),
+          const Divider(),
+          SizedBox(
+            height: MediaQuery.of(context).size.height - 120,
+            child: ListView.builder(
+              controller: ScrollController(), // Define seperate scroll controller for each listing 
+              scrollDirection: Axis.vertical,
+              shrinkWrap: true,
+              itemCount: list.length,
+              itemBuilder: (context, index) {
+                return _listTile(list[index]);
+              })
+          )
+        ],
+      ),
+    );
   }
 
 
@@ -153,17 +230,49 @@ class _MyHomePageState extends State<MyHomePage> {
         title: Text(widget.title),
       ),
       body: Row(children: [
-        MyListView("Bot(s)", bots),
-        MyListView("Pending Order(s)", orders.where((i) => i.completedAt == null).toList()),
-        MyListView("Completed Order(s)", orders.where((i) => i.completedAt != null).toList()),
+        _listView("Bot(s)", bots),
+        _listView("Pending Order(s)", orders.where((i) => i.completedAt == null).toList()),
+        _listView("Completed Order(s)", orders.where((i) => i.completedAt != null).toList()),
       ])
       ,
       floatingActionButtonLocation: ExpandableFab.location,
       floatingActionButton: ExpandableFab(children: [
         FloatingActionButton(
-          onPressed: _addBot,
+          onPressed: () {
+            if(!_isPressed) {
+              setState(() {
+                _isPressed = true; // set the button state to true
+              });
+              _addBot();
+
+              Future.delayed(const Duration(milliseconds: 500), () {
+                setState(() {
+                  _isPressed = false; // set the button state to false when done
+                });
+              });
+            }
+        }, // use arrow function,
           tooltip: 'New Bot',
-          child: const Icon(Icons.people),
+          child: const Icon(Icons.group_add),
+        ),
+        FloatingActionButton(
+          onPressed: () {
+            if(!_isPressed) {
+              setState(() {
+                _isPressed = true; // set the button state to true
+              });
+              _removeBot();
+
+              Future.delayed(const Duration(milliseconds: 500), () {
+                setState(() {
+                  _isPressed = false; // set the button state to false when done
+                });
+              });
+            }
+        }, // use arrow function,
+          tooltip: 'Remove Bot',
+          backgroundColor: Colors.red,
+          child: const Icon(Icons.group_remove),
         ),
         FloatingActionButton(
           onPressed: _addOrder,
@@ -171,7 +280,7 @@ class _MyHomePageState extends State<MyHomePage> {
           child: const Icon(Icons.add),
         ),
         FloatingActionButton(
-          backgroundColor: Colors.red,
+          backgroundColor: Colors.orange,
           onPressed: () => _addOrder(vip: true),
           tooltip: 'New VIP Order',
           child: const Icon(Icons.add),

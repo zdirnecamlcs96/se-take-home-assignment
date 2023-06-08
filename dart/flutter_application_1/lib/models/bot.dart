@@ -9,5 +9,5 @@ class Bot {
   int? remaining;
   Order? order;
 
-  Bot(this.uniqueId, [this.orderId, this.timer, this.remaining]);
+  Bot(this.uniqueId, [this.orderId, this.timer, this.remaining = 0]);
 }
