@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import './models/order.dart';
-import './models/bot.dart';
+import 'dart:core';
+import 'package:collection/collection.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:flutter_application_1/models/order.dart';
+import 'package:flutter_application_1/models/bot.dart';
 import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
+
+final orderProvider = StateProvider<List<Order>>((_) {
+  return [];
+});
 
 void main() {
   runApp(const MyApp());
@@ -51,7 +58,7 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
-class MyListView extends StatelessWidget {
+class MyListView extends StatefulWidget {
   MyListView(this.title, this.list);
 
   final List list;
@@ -86,6 +93,9 @@ class MyListView extends StatelessWidget {
       ),
     );
   }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _MyHomePageState extends State<MyHomePage> {
@@ -97,7 +107,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _addOrder({bool vip = false}) {
     setState(() {
-      orders.add(Order(_orderUniqueId, vip));
+      orders.insert(0, Order(_orderUniqueId, vip));
       _orderUniqueId++;
     });
   }
@@ -118,11 +128,15 @@ class _MyHomePageState extends State<MyHomePage> {
     Timer.periodic(const Duration(seconds: 1), (timer) {
       bot.remaining = bot.remaining! - 1;
       bot.timer = timer;
+      bot.order = orders.firstOrNull;
       if (bot.remaining! <= 0) {
         timer.cancel();
+        bot.order?.completedAt = DateTime.now();
       }
     });
   }
+
+
 
   @override
   Widget build(BuildContext context) {
