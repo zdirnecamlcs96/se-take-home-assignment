@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import './models/order.dart';
+import './models/bot.dart';
+import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
 
 void main() {
   runApp(const MyApp());
@@ -47,17 +51,76 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
+class MyListView extends StatelessWidget {
+  MyListView(this.title, this.list);
+
+  final List list;
+  final String title;
+  
+  @override
+  Widget build(BuildContext context) {
+
+    return Flexible(
+      child: Column(
+        children: <Widget>[
+          Text(title),
+          Divider(),
+          Container(
+            height: MediaQuery.of(context).size.height - 100,
+            child: ListView.builder(
+              controller: ScrollController(), // Define seperate scroll controller for each listing 
+              scrollDirection: Axis.vertical,
+              shrinkWrap: true,
+              itemCount: list.length,
+              itemBuilder: (context, index) {
+                final item = list[index];
+                return ListTile(
+                  title: Text("${item is Bot ? 'Bot(s)' : 'Order(s)'} ${item.uniqueId}"),
+                  subtitle: item is Order
+                    ? Text("${item.vip ? 'VIP' : 'Normal'}")
+                    : Text("${item.remaining}"),
+                );
+              })
+          )
+        ],
+      ),
+    );
+  }
+}
+
 class _MyHomePageState extends State<MyHomePage> {
   int _counter = 0;
+  int _orderUniqueId = 0;
+  int _botUniqueId = 0;
+  List orders = [];
+  List bots = [];
 
-  void _incrementCounter() {
+  void _addOrder({bool vip = false}) {
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      orders.add(Order(_orderUniqueId, vip));
+      _orderUniqueId++;
+    });
+  }
+
+  void _addBot() {
+    setState(() {
+      final bot = Bot(_botUniqueId);
+      bots.add(bot);
+      _botUniqueId++;
+      processOrder(bot);
+    });
+  }
+
+  void processOrder(Bot bot) {
+    bot.remaining = 10;
+    bot.timer = null;
+
+    Timer.periodic(const Duration(seconds: 1), (timer) {
+      bot.remaining = bot.remaining! - 1;
+      bot.timer = timer;
+      if (bot.remaining! <= 0) {
+        timer.cancel();
+      }
     });
   }
 
@@ -75,41 +138,31 @@ class _MyHomePageState extends State<MyHomePage> {
         // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
-          ],
+      body: Row(children: [
+        MyListView("Bot(s)", bots),
+        MyListView("Pending Order(s)", orders.where((i) => i.completedAt == null).toList()),
+        MyListView("Completed Order(s)", orders.where((i) => i.completedAt != null).toList()),
+      ])
+      ,
+      floatingActionButtonLocation: ExpandableFab.location,
+      floatingActionButton: ExpandableFab(children: [
+        FloatingActionButton(
+          onPressed: _addBot,
+          tooltip: 'New Bot',
+          child: const Icon(Icons.people),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+        FloatingActionButton(
+          onPressed: _addOrder,
+          tooltip: 'New Order',
+          child: const Icon(Icons.add),
+        ),
+        FloatingActionButton(
+          backgroundColor: Colors.red,
+          onPressed: () => _addOrder(vip: true),
+          tooltip: 'New VIP Order',
+          child: const Icon(Icons.add),
+        ),
+      ],)
     );
   }
 }
