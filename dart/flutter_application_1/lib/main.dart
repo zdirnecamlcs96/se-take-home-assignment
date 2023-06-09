@@ -9,12 +9,51 @@ import 'package:flutter_application_1/models/order.dart';
 import 'package:flutter_application_1/models/bot.dart';
 import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
 
-final orderProvider = StateProvider<List<Order?>>((_) {
-  return [];
+class _OrderStateNotifier extends StateNotifier<List<Order>> {
+  static var _runningId = 0;
+  _OrderStateNotifier(super.state);
+
+  void addOrder({bool vip = false}) {
+    var newId = ++_runningId;
+    if (vip) {
+      state = [Order(newId, vip), ...state];
+    } else {
+      state = [...state, Order(newId, vip)];
+    }
+  }
+}
+
+final _orderProvider = StateNotifierProvider<_OrderStateNotifier, List<Order>>((ref) {
+  return _OrderStateNotifier([]);
 });
 
-final botProvider = StateProvider<List<Bot?>>((_) {
-  return [];
+
+class _BotStateNotifier extends StateNotifier<List<Bot>> {
+  static var _runningId = 0;
+  _BotStateNotifier(super.state);
+
+  void _addBot() {
+    var newId = ++_runningId;
+    final bot = Bot(newId);
+    state = [...state, bot];
+  }
+
+  void _removeBot() {
+    Bot? bot = state.isNotEmpty ? state.last : null;
+
+    if (bot == null) {
+      return;
+    }
+
+    Order? order = bot.order;
+    bot.timer?.cancel();
+    order?.bot = null;
+    state = [...state]..remove(bot);
+  }
+}
+
+final _botProvider = StateNotifierProvider<_BotStateNotifier, List<Bot>>((ref) {
+  return _BotStateNotifier([]);
 });
 
 void main() {
@@ -65,13 +104,15 @@ class MyHomePage extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     var _isPressed = useState(false);
-    var _orderUniqueId = useState(0);
-    var _botUniqueId = useState(0);
+    var hasUpdate = useState(0);
 
-    var orders = useState([]);
-    var bots = useState([]);
+    var orders = ref.watch(_orderProvider);
+    var bots = ref.watch(_botProvider);
 
-    void processOrder(Bot? bot) {
+
+
+    void checkShouldProcess() {
+      Bot? bot = bots.firstWhereOrNull((element) => element.order == null);
       // check if the bot is null
       if (bot == null) return;
 
@@ -81,9 +122,8 @@ class MyHomePage extends HookConsumerWidget {
       // cancel the previous timer if any
       bot.timer?.cancel();
 
-      Order? order = orders.value.firstWhere(
-          (n) => n.bot == null && n.completedAt == null,
-          orElse: () => null);
+      Order? order = orders
+          .firstWhereOrNull((n) => n.bot == null && n.completedAt == null);
 
       if (order != null) {
         bot.remaining = 10;
@@ -95,46 +135,16 @@ class MyHomePage extends HookConsumerWidget {
             timer.cancel();
             order.completedAt = DateTime.now();
             bot.order = null;
-            processOrder(bot);
+            checkShouldProcess();
           }
-
-          bots.value = [...bots.value];
+          hasUpdate.value++;
         });
       }
     }
 
-    void _addOrder({bool vip = false}) {
-      if (vip) {
-        orders.value = [Order(_orderUniqueId.value, vip), ...orders.value];
-      } else {
-        orders.value = [...orders.value, Order(_orderUniqueId.value, vip)];
-      }
-      _orderUniqueId.value++;
-      processOrder(
-          bots.value.firstWhere((n) => n.order == null, orElse: () => null));
-    }
-
-    void _addBot() {
-      final bot = Bot(_botUniqueId.value);
-      bots.value = [...bots.value, bot];
-      _botUniqueId.value++;
-      processOrder(bot);
-    }
-
-    void _removeBot() {
-      Bot? bot = bots.value.isNotEmpty ? bots.value.last : null;
-
-      if (bot == null) {
-        return;
-      }
-
-      Order? order = bot.order;
-      bot.timer?.cancel();
-      order?.bot = null;
-      bots.value = [...bots.value, bot]..remove(bot);
-      processOrder(
-          bots.value.firstWhere((n) => n.order == null, orElse: () => null));
-    }
+    useEffect(() {
+      checkShouldProcess();
+    }, [orders, bots]);
 
     ListTile _listTile(item) {
       return item is Bot
@@ -181,11 +191,11 @@ class MyHomePage extends HookConsumerWidget {
           title: Text(title),
         ),
         body: Row(children: [
-          _listView("Bot(s)", bots.value),
+          _listView("Bot(s)", bots),
           _listView("Pending Order(s)",
-              orders.value.where((i) => i?.completedAt == null).toList()),
+              orders.where((i) => i.completedAt == null).toList()),
           _listView("Completed Order(s)",
-              orders.value.where((i) => i?.completedAt != null).toList()),
+              orders.where((i) => i.completedAt != null).toList()),
         ]),
         floatingActionButtonLocation: ExpandableFab.location,
         floatingActionButton: ExpandableFab(
@@ -194,7 +204,7 @@ class MyHomePage extends HookConsumerWidget {
               onPressed: () {
                 if (!_isPressed.value) {
                   _isPressed.value = true;
-                  _addBot();
+                  ref.read(_botProvider.notifier)._addBot();
 
                   Future.delayed(const Duration(milliseconds: 500), () {
                     _isPressed.value = false;
@@ -208,8 +218,7 @@ class MyHomePage extends HookConsumerWidget {
               onPressed: () {
                 if (!_isPressed.value) {
                   _isPressed.value = true;
-                  _removeBot();
-
+                  ref.read(_botProvider.notifier)._removeBot();
                   Future.delayed(const Duration(milliseconds: 500), () {
                     _isPressed.value = false;
                   });
@@ -220,13 +229,13 @@ class MyHomePage extends HookConsumerWidget {
               child: const Icon(Icons.group_remove),
             ),
             FloatingActionButton(
-              onPressed: _addOrder,
+              onPressed: () => ref.read(_orderProvider.notifier).addOrder(),
               tooltip: 'New Order',
               child: const Icon(Icons.add),
             ),
             FloatingActionButton(
               backgroundColor: Colors.orange,
-              onPressed: () => _addOrder(vip: true),
+              onPressed: () => ref.read(_orderProvider.notifier).addOrder(vip: true),
               tooltip: 'New VIP Order',
               child: const Icon(Icons.add),
             ),
